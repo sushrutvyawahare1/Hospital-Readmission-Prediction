@@ -1,0 +1,176 @@
+---
+title: "SushrutRproject"
+author: "Sushrut Vyawahare"
+date: "December 30, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# R Project #
+
+# Readind the file #
+```{r}
+getwd()
+setwd("C:/Users/DELL/Documents/Imarticus_data")
+diabetes <- read.csv("diabetes_allcols.csv")
+names(diabetes)
+head(diabetes)
+str(diabetes)
+summary(diabetes)
+diabetes1 <- subset(diabetes,select=-c(encounter_id, patient_nbr, examide,
+                                       citoglipton,weight, payer_code, medical_specialty)) 
+names(diabetes1)
+names(diabetes)
+```
+
+#Basic summary of selected data and correlation plot of numeric data
+```{r}
+library(dplyr)
+library(corrplot)
+summary(diabetes)
+num_diabetes <- select_if(diabetes, is.numeric)
+c <- cor(num_diabetes, use= "pairwise.complete.obs")
+corrplot(c)
+```
+
+#Data cleaning 
+```{r}
+diabetes2 <- diabetes1[diabetes1$race !="?",]
+diabetes2 <- diabetes2[diabetes2$diag_1 !="?",]
+diabetes2 <- diabetes2[diabetes2$diag_2 !="?",]
+diabetes2 <- diabetes2[diabetes2$diag_3 !="?",]
+str(diabetes2)
+names(diabetes2)
+```
+
+#Binary Representation of readmitted #
+```{r}
+diabetes2$readmitted <- ifelse(diabetes2$readmitted == "<30",1,0)
+table(diabetes2$readmitted)
+```
+
+#To make factor level #
+```{r}
+diabetes3 <-cbind(diabetes2[c(7:13,17)],lapply(diabetes2[c(1:6,14:16,18:43)],
+                                               factor))
+str(diabetes3)
+head(diabetes3)
+```
+
+#Table to get frquency of different levels of readmission#
+```{r}
+table(diabetes3$readmitted)
+
+prop.table(table(diabetes3$readmitted))
+
+table(diabetes3$readmitted)  
+```
+
+#check region wise #
+```{r}
+racewise <- table(diabetes3$readmitted,diabetes3$race)
+racewise
+```
+
+#Check Gender wise#
+```{r}
+genderwise <- table(diabetes3$readmitted,diabetes3$gender)
+genderwise
+```
+
+#Check Age wise#
+```{r}
+agewise <- table(diabetes3$readmitted,diabetes3$age)
+agewise
+```
+
+#ploting graph  readmitted #
+```{r}
+library(ggplot2)
+plot(table(diabetes$readmitted),xlab = " Readmission ", main = " Frequency of Readmission")
+
+plot(table(diabetes3$readmitted),xlab = " Readmission ", main = " Frequency of Readmission")
+```
+
+#Dividing test and train#
+```{r}
+library(caret)
+library(ggplot2)
+library(lattice)
+library(kernlab)
+
+inTrain <- createDataPartition(diabetes3$readmitted,p = .2,list = F)
+Training <- diabetes3[inTrain,]
+Testing <- diabetes3[-inTrain,]
+
+dim(Training)
+dim(Testing)
+```
+
+#glm method#
+```{r}
+modFit <- train(readmitted ~ time_in_hospital + num_lab_procedures + num_procedures
+                + num_medications+ number_outpatient + number_emergency + 
+                  number_inpatient + race + age + admission_type_id + 
+                  discharge_disposition_id + admission_source_id  + max_glu_serum + 
+                  A1Cresult + metformin + insulin,data = Training,method = "glm")
+modFit$finalModel
+
+prediction <- predict(modFit,newdata = Testing)
+table(prediction)
+confusionMatrix(prediction,Testing$readmitted)
+#  Accuracy : 0.8866 #
+```
+
+#Rpart# Recursive Partitioning And Regression Trees
+```{r}
+library(rpart)
+modFit1 <- train(readmitted ~ time_in_hospital + num_lab_procedures + num_procedures
+                 + num_medications+ number_outpatient + number_emergency + 
+                   number_inpatient + race + age + admission_type_id + 
+                   discharge_disposition_id + admission_source_id  + max_glu_serum + 
+                   A1Cresult + metformin + insulin,data = Training,method = "rpart")
+modFit1$finalModel
+
+prediction1 <- predict(modFit1,newdata = Testing)
+confusionMatrix(prediction1,Testing$readmitted)
+#Accuracy : 0.8872 #
+```
+
+#Random Forest #
+
+library(randomForest)
+modFit_rf <- train(readmitted ~ time_in_hospital + num_lab_procedures + num_procedures
+                  + num_medications+ number_outpatient + number_emergency + 
+                    number_inpatient + race + age + admission_type_id + 
+                    discharge_disposition_id + admission_source_id  + max_glu_serum + 
+                    A1Cresult + metformin + insulin,data = Training,method = 
+                    "glm", minsplit = 1, minbucket = 1, cp = 0.001)
+print(modFit_rf$finalModel)
+plot(modFit_rf$finalModel,uniform = T,main = "Classification Tree")
+
+# SVM Model #
+library(e1071)
+svmmodel <- svm(readmitted ~ time_in_hospital + num_lab_procedures + num_procedures
+                + num_medications+ number_outpatient + number_emergency + 
+                  number_inpatient + race + age + admission_type_id + 
+                  discharge_disposition_id + admission_source_id  + max_glu_serum + 
+                  A1Cresult + metformin + insulin,data = Training,kernel = "linear",
+                type = "C-classification", cross = 10, cost = 0.01, gamma = 1000)
+summary(svmmodel)
+prediction2 <- predict(summodel,newdata = Testing)
+confusionMatrix(prediction2,Testing$readmitted)
+
+#Performance 
+result <-as.data.frame(table(prdiction2,Testing$readmitted)) 
+result 
+CorrectlyPredicted <- result[1,3] + result[4,3] 
+accuracy <- CorrectlyPredicted / nrow(test) 
+accuracy 
+senstivity_result <- result[4,3] / (result[2,3] + result[4,3]) 
+senstivity_result  
+specificity_result <- result[1,3] / (result[3,3] + result[1,3]) 
+specificity_result 
